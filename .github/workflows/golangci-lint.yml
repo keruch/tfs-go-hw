@@ -1,7 +1,8 @@
 name: runTestsAndLinters
 on: [push, pull_request]
 
-test:
+jobs:
+  test:
     strategy:
       matrix:
         go: [ 1.17, 1.16 ]
