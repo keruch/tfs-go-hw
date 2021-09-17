@@ -2,19 +2,42 @@ package main
 
 import "fmt"
 
-type Color int
-type CharStyle int
-type SandGlassMod func(size int, char rune, str string) (int, rune, string)
+type (
+	Color     = int
+	CharStyle = int
+	Attribute int
+	Settings  map[Attribute]int
+	Mod       func(Settings) Settings
+)
 
 const (
-	Black Color = iota
-	Red
-	Green
-	Brown
-	Blue
-	Purple
-	Cyan
-	Gray
+	Size Attribute = iota
+	Char
+	Foreground
+	Background
+	Style
+)
+
+const (
+	BgBlack Color = 40 + iota
+	BgRed
+	BgGreen
+	BgBrown
+	BgBlue
+	BgPurple
+	BgCyan
+	BgGray
+)
+
+const (
+	FgBlack Color = 30 + iota
+	FgRed
+	FgGreen
+	FgBrown
+	FgBlue
+	FgPurple
+	FgCyan
+	FgGray
 )
 
 const (
@@ -25,69 +48,45 @@ const (
 	Reverse
 )
 
-func printSandGlass(mods ...SandGlassMod) {
-	// default values for size and char
-	size, char := 8, '#'
-
-	// apply functions to size and char
-	for _, mod := range mods {
-		size, char, _ = mod(size, char, "")
+func printSandGlass(mods ...Mod) {
+	// default values of all attributes
+	settings := Settings{
+		Size:       8,
+		Char:       '#',
+		Foreground: FgRed,
+		Background: BgGreen,
+		Style:      Bold,
 	}
 
-	for lineNumber := 0; lineNumber < size; lineNumber++ {
-		for columnNumber := 0; columnNumber < size; columnNumber++ {
+	// apply functions to settings
+	for _, mod := range mods {
+		settings = mod(settings)
+	}
+
+	for lineNumber := 0; lineNumber < settings[Size]; lineNumber++ {
+		for columnNumber := 0; columnNumber < settings[Size]; columnNumber++ {
 			var symbol rune
-			if (lineNumber == 0 || lineNumber == size-1) ||
-				(columnNumber == lineNumber || columnNumber == size-lineNumber-1) {
-				symbol = char
+			if (lineNumber == 0 || lineNumber == settings[Size]-1) ||
+				(columnNumber == lineNumber || columnNumber == settings[Size]-lineNumber-1) {
+				symbol = rune(settings[Char])
 			} else {
 				symbol = ' '
 			}
-			formatString := string(symbol)
-
-			// apply functions to format string
-			for _, mod := range mods {
-				_, _, formatString = mod(0, 0, formatString)
-			}
-			fmt.Print(formatString)
+			fmt.Printf("\033[%dm\033[%dm\033[%dm%c\033[0m\033[0m\033[0m",
+				settings[Foreground], settings[Background], settings[Style], symbol)
 		}
 		fmt.Println()
 	}
 }
 
 func main() {
-	printSandGlass(setSandGlassChar('H'), setSandGlassSize(5),
-		setCharStyle(Reverse), setBackgroundColor(Red), setForegroundColor(Blue))
+	printSandGlass(setAttribute(Size, 5), setAttribute(Background, BgBlue),
+		setAttribute(Foreground, FgRed), setAttribute(Char, 'F'), setAttribute(Style, Bold))
 }
 
-func setForegroundColor(color Color) SandGlassMod {
-	color += 30
-	return func(size int, char rune, s string) (int, rune, string) {
-		return size, char, fmt.Sprintf("\033[%dm%s\033[0m", color, s)
-	}
-}
-
-func setBackgroundColor(color Color) SandGlassMod {
-	color += 40
-	return func(size int, char rune, s string) (int, rune, string) {
-		return size, char, fmt.Sprintf("\033[%dm%s\033[0m", color, s)
-	}
-}
-
-func setCharStyle(style CharStyle) SandGlassMod {
-	return func(size int, char rune, s string) (int, rune, string) {
-		return size, char, fmt.Sprintf("\033[%dm%s\033[0m", style, s)
-	}
-}
-
-func setSandGlassSize(inputSize int) SandGlassMod {
-	return func(size int, char rune, s string) (int, rune, string) {
-		return inputSize, char, s
-	}
-}
-
-func setSandGlassChar(inputChar rune) SandGlassMod {
-	return func(size int, char rune, s string) (int, rune, string) {
-		return size, inputChar, s
+func setAttribute(attr Attribute, value int) Mod {
+	return func(settings Settings) Settings {
+		settings[attr] = value
+		return settings
 	}
 }
