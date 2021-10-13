@@ -25,9 +25,7 @@ type (
 	}
 	operationData struct {
 		Company   string `json:"company"`
-		Operation struct {
-			operation
-		}
+		Operation operation
 		operation
 	}
 	companyTransactions struct {
@@ -93,13 +91,6 @@ func (a sortByTime) Less(i, j int) bool {
 
 func (a sortByTime) Swap(i, j int) {
 	a[i], a[j] = a[j], a[i]
-}
-
-func (o operationData) Correct() bool {
-	if o.Company == "" || o.getCreationTime() == "" || o.getOperationID() == "" {
-		return false
-	}
-	return true
 }
 
 func (o operationData) Valid() bool {
@@ -263,15 +254,16 @@ func processData(data []byte) ([]companyTransactions, error) {
 }
 
 func prepareData(o []operationData) []operationData {
-	o = deleteIncorrectOperations(o)
+	o = deleteOperationsWithMissingData(o)
 	sort.Sort(sortByTime(o))
 	return o
 }
 
-func deleteIncorrectOperations(o []operationData) []operationData {
+// delete operations without company, created_at or id fields
+func deleteOperationsWithMissingData(o []operationData) []operationData {
 	res := make([]operationData, 0)
 	for _, val := range o {
-		if val.Correct() {
+		if val.Company != "" && val.getCreationTime() != "" && val.getOperationID() != "" {
 			res = append(res, val)
 		}
 	}
