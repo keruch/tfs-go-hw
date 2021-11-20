@@ -1,4 +1,4 @@
-module tfs-go-hw/hw3
+module github.com/keruch/tfs-go-hw/hw3
 
 go 1.17
 

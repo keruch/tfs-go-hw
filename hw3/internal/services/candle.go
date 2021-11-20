@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"tfs-go-hw/hw3/internal/domain"
-	"tfs-go-hw/hw3/internal/handlers"
-	"tfs-go-hw/hw3/internal/repository"
-	"tfs-go-hw/hw3/pkg/log"
 	"time"
+
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain"
+	"github.com/keruch/tfs-go-hw/hw3/internal/handlers"
+	"github.com/keruch/tfs-go-hw/hw3/internal/repository"
+	"github.com/keruch/tfs-go-hw/hw3/pkg/log"
 )
 
 type CandlesService struct {

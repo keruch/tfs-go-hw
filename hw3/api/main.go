@@ -4,12 +4,13 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"tfs-go-hw/hw3/internal/domain/generator"
-	"tfs-go-hw/hw3/internal/repository"
-	"tfs-go-hw/hw3/internal/services"
 	"time"
 
-	"tfs-go-hw/hw3/pkg/log"
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain/generator"
+	"github.com/keruch/tfs-go-hw/hw3/internal/repository"
+	"github.com/keruch/tfs-go-hw/hw3/internal/services"
+
+	"github.com/keruch/tfs-go-hw/hw3/pkg/log"
 )
 
 var tickers = []string{"AAPL", "SBER", "NVDA", "TSLA"}
