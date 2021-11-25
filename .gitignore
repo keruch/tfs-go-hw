@@ -5,3 +5,7 @@ vendor
 prices.csv
 
 *.exe
+
+config.toml
+
+go.sum

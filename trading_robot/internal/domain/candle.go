@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"errors"
 	"time"
 )
 
+// Candle TODO: move to candles path
 type Candle struct {
 	Ticker string
 	Period CandlePeriod // Интервал
@@ -14,34 +16,51 @@ type Candle struct {
 	TS     time.Time    // Время начала интервала
 }
 
-func NewCandle(ticker Ticker, period CandlePeriod, TS time.Time) Candle {
+func NewCandle(price Price, period CandlePeriod, TS time.Time) Candle {
 	return Candle{
-		Ticker: ticker.Pair,
+		Ticker: price.ProductID,
 		Period: period,
-		Open: ticker.Ask,
-		High: ticker.Ask,
-		Low: ticker.Ask,
-		Close: ticker.Ask,
+		Open: price.Price,
+		High: price.Price,
+		Low: price.Price,
+		Close: price.Price,
 		TS:     TS,
 	}
 }
 
-func Update(c Candle, ticker Ticker) Candle {
-	if c.High < ticker.Ask {
-		c.High = ticker.Ask
+func Update(c Candle, p Price) Candle {
+	if c.High < p.Price {
+		c.High = p.Price
 	}
 
-	if c.Low > ticker.Ask || c.Low == 0 {
-		c.Low = ticker.Ask
+	if c.Low > p.Price || c.Low == 0 {
+		c.Low = p.Price
 	}
 
-	c.Close = ticker.Ask
+	c.Close = p.Price
 
 	return c
 }
 
-// TODO: uncomment if needed
-//func (c Candle) String() string {
-//	TS := c.TS.Format(time.RFC3339)
-//	return fmt.Sprintf("%s,%s,%f,%f,%f,%f", c.Ticker, TS, c.Open, c.High, c.Low, c.Close)
-//}
+var ErrUnknownPeriod = errors.New("unknown period")
+
+type CandlePeriod string
+
+const (
+	CandlePeriod1m  CandlePeriod = "1m"
+	CandlePeriod2m  CandlePeriod = "2m"
+	CandlePeriod10m CandlePeriod = "10m"
+)
+
+func PeriodTS(period CandlePeriod, ts time.Time) (time.Time, error) {
+	switch period {
+	case CandlePeriod1m:
+		return ts.Truncate(time.Minute), nil
+	case CandlePeriod2m:
+		return ts.Truncate(2 * time.Minute), nil
+	case CandlePeriod10m:
+		return ts.Truncate(10 * time.Minute), nil
+	default:
+		return time.Time{}, ErrUnknownPeriod
+	}
+}

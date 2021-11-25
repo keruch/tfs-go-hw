@@ -5,46 +5,95 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/keruch/tfs-go-hw/trading_robot/config"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/candles"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/exchange"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/indicator"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/processor"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/repository"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
 )
 
-func init() {
-	os.Setenv("PUBLIC_KEY", "OLlMf8FawHE0FC4L7wZmvpxDEZcz184C0DbG6WgX3+ZoLb4s9EmtI9VR")
-	os.Setenv("PRIVATE_KEY", "tm+El0L45IDVJLoy05xRWf8Bu7IcyRpsrXwYe5GPtuLlKzcxE3rluKNf6oggf5E0jEUmgtGUo8WXywshBSEToZxM")
+func SetupStrategy() indicator.Strategy {
+	alphaFunc := func(p int) float64 {
+		return 2 / float64(p+1)
+	}
+	period := 100
+	//macd := NewMACDEvaluator(12, 26, 9, alphaFunc)
+	ema := indicator.NewEMAEvaluator(period, alphaFunc)
+	//NewMACDStrategy(macd)
+	return indicator.NewStrategiesComposition(indicator.NewEMAStrategy(ema))
 }
 
 func main() {
-	// PUBLIC_KEY and PRIVATE_KEY env variables have to be set
+	// setup logger and config
 	logger := log.NewLogger()
-	ex, err := exchange.NewKrakenExchange(logger)
+	err := config.SetupConfig()
 	if err != nil {
-		logger.Errorf("NewKrakenService: %s", err)
-		return
+		logger.Fatal(err)
 	}
 
-	out := ex.Listen()
+	// setup strategy
+	strat := SetupStrategy()
+	logger.Info("Setup strategy")
+
+	// setup exchange
+	ex, err := exchange.NewKrakenExchange(logger)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	defer ex.CloseConnection()
+	logger.Info("Setup exchange")
+
+	// setup repository
+	repo, err := repository.NewPostgreSQLPool(config.GetDatabaseURL(), logger)
+	if err != nil {
+		logger.Fatal(err)
+	}
+	logger.Info("Setup repository")
+
+	// setup orders processor
+	proc := processor.NewOrdersProcessor(strat, repo, ex, logger)
+	logger.Info("Setup processor")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	// get prices from exchange
+	prices := ex.GetPrices(ctx)
+
+	// generate candles from prices
+	wg.Add(1)
+	candle := candles.GenerateCandles(prices, config.GetPeriod(), &wg)
+
+	//skip the first candle (she is invalid)
+	//<-candle
+
+	// run processor
+	wg.Add(1)
+	proc.ProcessCandles(candle, &wg)
+	logger.Info("Processing candles...")
+
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	// POST /pair - to change pair
-	// POST /index/{params} - for index
+	// POST /indicator/{params} - for indicator
 	// POST /operations/shutdown - for shutdown
 	// (?) POST /operations/start - for start
 	// (?) POST /operations/stop - for stop
 
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, os.Interrupt)
-
 	router := mux.NewRouter()
 	router.Methods(http.MethodPost).PathPrefix(domain.SubscribePair).HandlerFunc(
 		func(writer http.ResponseWriter, request *http.Request) {
-			// TODO: add error if user will call subscribe twice
 			vars := mux.Vars(request)
 			ticker := vars[domain.PairVar]
-			err := ex.SubscribePairs(ticker)
+			err = ex.SubscribePairs(ticker)
 			if err != nil {
 				logger.Errorf("%s endpoint: %s", domain.SubscribePair, err)
 				writer.WriteHeader(http.StatusBadRequest)
@@ -53,20 +102,19 @@ func main() {
 
 	router.Methods(http.MethodPost).PathPrefix(domain.UnsubscribePair).HandlerFunc(
 		func(writer http.ResponseWriter, request *http.Request) {
-			// TODO: add error if user will call subscribe twice
 			vars := mux.Vars(request)
 			ticker := vars[domain.PairVar]
-			err := ex.UnsubscribePairs(ticker)
+			err = ex.UnsubscribePairs(ticker)
 			if err != nil {
 				logger.Errorf("%s endpoint: %s", domain.UnsubscribePair, err)
 				writer.WriteHeader(http.StatusBadRequest)
 			}
 		})
-	//router.Methods(http.MethodPost).PathPrefix(kraken.IndexEndpoint).HandlerFunc(h.GetOrders)
-	router.Methods(http.MethodPost).PathPrefix(domain.OperationsEndpoint + domain.ShutdownOperation).HandlerFunc(
+
+	router.Methods(http.MethodPost).PathPrefix(domain.ShutdownOperation).HandlerFunc(
 		func(writer http.ResponseWriter, request *http.Request) {
 			shutdown <- os.Interrupt
-	})
+		})
 
 	srv := &http.Server{
 		Handler:      router,
@@ -76,39 +124,27 @@ func main() {
 	}
 
 	go func() {
-		if err := srv.ListenAndServe(); err != nil {
+		logger.Info("Setup server")
+		if err = srv.ListenAndServe(); err != nil {
 			logger.Infof("ListenAndServe: %s", err)
 		}
 	}()
 
-	go func() {
-		for data := range out {
-			logger.Trace(string(data))
-		}
-	}()
-
 	<-shutdown
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), domain.WaitTime)
-	defer shutdownCancel()
+	ctxTimeout, cancelTimeout := context.WithTimeout(context.Background(), 3*time.Second)
 
 	go func() {
-		srvCtx, srvCancel := context.WithCancel(shutdownCtx)
-		if err := srv.Shutdown(srvCtx); err != nil {
-			logger.Errorf("Server shutdown: %s", err)
+		if err = srv.Shutdown(ctxTimeout); err != nil {
+			logger.Fatal(err)
 		}
-		srvCancel()
-		logger.Infof("Server closed")
+		cancelTimeout()
+		logger.Info("Server done")
 	}()
 
-	go func() {
-		if err := ex.Shutdown(); err != nil {
-			logger.Errorf("Kraken exchange shutdown: %s", err)
-		}
-		logger.Infof("Kraken exchange closed")
-	}()
+	cancel()
+	wg.Wait()
 
-	<-shutdownCtx.Done()
+	<-ctxTimeout.Done()
 
-	logger.Infof("Trading robot closed")
+	logger.Infof("Trading robot close.")
 }

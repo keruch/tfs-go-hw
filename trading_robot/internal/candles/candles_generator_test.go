@@ -1,6 +1,7 @@
 package candles
 
 import (
+	"sync"
 	"testing"
 	"time"
 
@@ -49,7 +50,9 @@ func TestGenerateCandles(t *testing.T) {
 	a := assert.New(t)
 
 	in := MockTickersGenerator()
-	out := GenerateCandles(in, domain.CandlePeriod1m)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	out := GenerateCandles(in, domain.CandlePeriod1m, &wg)
 
 	_ = <-out // the first value is always invalid
 
@@ -73,49 +76,51 @@ func TestGenerateCandles(t *testing.T) {
 		candle := <-out
 		a.Equalf(test3, candle, "Tickers should be the same")
 	}
+
+	wg.Wait()
 }
 
-func MockTickersGenerator() <-chan domain.Ticker {
-	out := make(chan domain.Ticker)
+func MockTickersGenerator() <-chan domain.Price {
+	out := make(chan domain.Price)
 
-	tickers := []domain.Ticker{
+	tickers := []domain.Price{
 		// for test 1
 		{
-			Time: mockTime.Add(10 * time.Second), // 15:20:20
-			Pair: mockPair,
-			Ask:  test1.Open,
+			Time:      domain.UnixTS(mockTime.Add(10 * time.Second)), // 15:20:20
+			ProductID: mockPair,
+			Price:     test1.Open,
 		},
 		{
-			Time: mockTime.Add(20 * time.Second), // 15:20:30,
-			Pair: mockPair,
-			Ask:  test1.High,
+			Time:      domain.UnixTS(mockTime.Add(20 * time.Second)), // 15:20:30,
+			ProductID: mockPair,
+			Price:     test1.High,
 		},
 		{
-			Time: mockTime.Add(30 * time.Second), // 15:20:40,
-			Pair: mockPair,
-			Ask:  test1.Low,
+			Time:      domain.UnixTS(mockTime.Add(30 * time.Second)), // 15:20:40,
+			ProductID: mockPair,
+			Price:     test1.Low,
 		},
 		{
-			Time: mockTime.Add(40 * time.Second), // 15:20:50,
-			Pair: mockPair,
-			Ask:  test1.Close,
+			Time:      domain.UnixTS(mockTime.Add(40 * time.Second)), // 15:20:50,
+			ProductID: mockPair,
+			Price:     test1.Close,
 		},
 		// tickers for test 2
 		{
-			Time: mockTime.Add(2 * time.Minute).Add(10 * time.Second), // 15:22:20,
-			Pair: mockPair,
-			Ask:  test2.Open,
+			Time:      domain.UnixTS(mockTime.Add(2 * time.Minute).Add(10 * time.Second)), // 15:22:20,
+			ProductID: mockPair,
+			Price:     test2.Open,
 		},
 		{
-			Time: mockTime.Add(2 * time.Minute).Add(20 * time.Second), // 15:22:30,
-			Pair: mockPair,
-			Ask:  test2.Close,
+			Time:      domain.UnixTS(mockTime.Add(2 * time.Minute).Add(20 * time.Second)), // 15:22:30,
+			ProductID: mockPair,
+			Price:     test2.Close,
 		},
 		// tickers for test 3
 		{
-			Time: mockTime.Add(4 * time.Minute).Add(40 * time.Second), // 15:24:50,
-			Pair: "TEST_TICKER",
-			Ask:  test3.Open,
+			Time:      domain.UnixTS(mockTime.Add(4 * time.Minute).Add(40 * time.Second)), // 15:24:50,
+			ProductID: "TEST_TICKER",
+			Price:     test3.Open,
 		},
 	}
 

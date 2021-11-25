@@ -1,36 +1,32 @@
 package exchange
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"crypto/sha512"
-	"encoding/base64"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
-	"net/http"
 	"net/url"
-	"os"
 	"sync"
 
 	rhttp "github.com/hashicorp/go-retryablehttp"
+	"github.com/keruch/tfs-go-hw/trading_robot/config"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/exchange/kraken"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/utils"
 )
 
-type krakenExchange struct {
+type KrakenExchange struct {
 	logger *log.Logger
 
 	client *rhttp.Client
 	conn   *utils.RetryableWSConn
 
-	shutdown chan bool
-
 	mu    sync.RWMutex
 	pairs map[string]bool
 }
 
-func NewKrakenExchange(logger *log.Logger) (Exchange, error) {
+func NewKrakenExchange(logger *log.Logger) (*KrakenExchange, error) {
 	u := url.URL{
 		Scheme: kraken.WsScheme,
 		Host:   kraken.Host,
@@ -48,17 +44,19 @@ func NewKrakenExchange(logger *log.Logger) (Exchange, error) {
 		return nil, err
 	}
 
-	return &krakenExchange{
-		logger:   logger,
-		client:   rhttp.NewClient(),
-		conn:     rwsconn,
-		shutdown: make(chan bool),
-		pairs:    make(map[string]bool),
+	client := rhttp.NewClient()
+	client.Logger = logger
+
+	return &KrakenExchange{
+		logger: logger,
+		client: client,
+		conn:   rwsconn,
+		pairs:  make(map[string]bool),
 	}, nil
 }
 
-func (k *krakenExchange) SendOrder(order *kraken.SendOrder, operation kraken.OperationEndpoint) (*kraken.ReceiveOrder, error) {
-	queryMap, err := QueryByOperation(order, operation)
+func (k *KrakenExchange) sendOrder(order domain.Order, operation kraken.OperationEndpoint) (*kraken.ReceiveOrder, error) {
+	queryMap, err := kraken.QueryByOperation(order, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -85,10 +83,12 @@ func (k *krakenExchange) SendOrder(order *kraken.SendOrder, operation kraken.Ope
 		return nil, err
 	}
 
+	k.logger.Trace(string(data))
+
 	return ro, nil
 }
 
-func (k *krakenExchange) createOrderRequest(operation kraken.OperationEndpoint, queryParams kraken.QueryParams) (*rhttp.Request, error) {
+func (k *KrakenExchange) createOrderRequest(operation kraken.OperationEndpoint, queryParams kraken.QueryParams) (*rhttp.Request, error) {
 	u := &url.URL{
 		Scheme:   kraken.Scheme,
 		Host:     kraken.Host,
@@ -102,7 +102,7 @@ func (k *krakenExchange) createOrderRequest(operation kraken.OperationEndpoint, 
 	}
 	u.RawQuery = q.Encode()
 
-	method, err := getMethodByOperation(operation)
+	method, err := kraken.GetMethodByOperation(operation)
 	if err != nil {
 		return nil, err
 	}
@@ -112,67 +112,31 @@ func (k *krakenExchange) createOrderRequest(operation kraken.OperationEndpoint, 
 		return nil, err
 	}
 
-	token, err := generateToken(os.Getenv("PRIVATE_KEY"), string(operation), q.Encode())
+	token, err := kraken.GenerateToken(config.GetPrivateKey(), string(operation), q.Encode())
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set(kraken.Authent, token)
-	req.Header.Set(kraken.APIKey, os.Getenv("PUBLIC_KEY"))
+	req.Header.Set(kraken.APIKey, config.GetPublicKey())
 
 	return req, nil
 }
 
-func getMethodByOperation(operation kraken.OperationEndpoint) (string, error) {
-	switch {
-	case operation == kraken.OpenOrders:
-		return http.MethodGet, nil
-	case operation == kraken.CreateOrder || operation == kraken.EditOrder || operation == kraken.CancelOrder:
-		return http.MethodPost, nil
-	default:
-		return "", kraken.ErrOperationNotFound
-	}
-}
-
-func generateToken(privateKey, endpoint, postData string) (string, error) {
-	// step1
-	step1 := postData + endpoint
-
-	// step2
-	sha := sha256.New()
-	sha.Write([]byte(step1))
-	step2 := sha.Sum(nil)
-
-	// step 3
-	step3, err := base64.StdEncoding.DecodeString(privateKey)
-	if err != nil {
-		return "", err
-	}
-
-	// step 4
-	h := hmac.New(sha512.New, step3)
-	h.Write(step2)
-	step4 := h.Sum(nil)
-
-	// step 5
-	step5 := base64.StdEncoding.EncodeToString(step4)
-
-	return step5, nil
-}
-
-func (k *krakenExchange) Listen() <-chan []byte {
-	out := make(chan []byte)
+func (k *KrakenExchange) GetPrices(ctx context.Context) <-chan domain.Price {
+	out := make(chan domain.Price)
 
 	go func() {
 		defer close(out)
 		for {
 			select {
-			case <-k.shutdown:
+			case <-ctx.Done():
+				k.logger.Info("Get Prices done")
 				return
 			default:
 				_, data, reconnected, err := k.conn.ReadMessage()
 				if err != nil {
-					// TODO: add recover
-					k.logger.Panic(err)
+					k.logger.Error(err)
+					continue
 				}
 
 				if reconnected {
@@ -181,14 +145,12 @@ func (k *krakenExchange) Listen() <-chan []byte {
 					}
 				}
 
-				// TODO: unmarshal only if message is valid (text template)
-				//var candleData kraken.CandleData
-				//err = json.Unmarshal(rawTicker, &candleData)
-				//if err != nil {
-				//	//panic(err)
-				//}
+				k.logger.Trace(string(data))
 
-				out <- data
+				price, ok := utils.ValidateDataIsPrice(data)
+				if ok {
+					out <- price
+				}
 			}
 		}
 	}()
@@ -196,14 +158,32 @@ func (k *krakenExchange) Listen() <-chan []byte {
 	return out
 }
 
-func (k *krakenExchange) Shutdown() error {
-	// TODO: add context functionality
-	//if err := k.closeConnection(); err != nil {
-	//	return err
-	//}
-	k.shutdown <- true
-
+func (k *KrakenExchange) CloseConnection() error {
 	return k.conn.Close()
+}
+
+func (k *KrakenExchange) SubscribePairs(pairs ...string) error {
+	k.mu.RLock()
+	if len(k.pairs) > 1 {
+		// TODO: delete hardcoded error
+		return errors.New("can't subscribe to more than one ticker feed")
+	}
+	k.mu.RUnlock()
+	k.mu.Lock()
+	for _, pair := range pairs {
+		k.pairs[pair] = true
+	}
+	k.mu.Unlock()
+	return k.sendRequest(kraken.SubscribeEvent, kraken.FeedType, pairs...)
+}
+
+func (k *KrakenExchange) UnsubscribePairs(pairs ...string) error {
+	k.mu.Lock()
+	for _, pair := range pairs {
+		delete(k.pairs, pair)
+	}
+	k.mu.Unlock()
+	return k.sendRequest(kraken.UnsubscribeEvent, kraken.FeedType, pairs...)
 }
 
 type request struct {
@@ -219,27 +199,7 @@ func newRequest(event kraken.Event, feed kraken.Feed) request {
 	}
 }
 
-func (k *krakenExchange) SubscribePairs(pairs ...string) error {
-	// TODO: add customization for feed type
-	k.mu.Lock()
-	for _, pair := range pairs {
-		k.pairs[pair] = true
-	}
-	k.mu.Unlock()
-	return k.sendRequest(kraken.SubscribeEvent, kraken.TickerFeed, pairs...)
-}
-
-func (k *krakenExchange) UnsubscribePairs(pairs ...string) error {
-	// TODO: add customization for feed type
-	k.mu.Lock()
-	for _, pair := range pairs {
-		delete(k.pairs, pair)
-	}
-	k.mu.Unlock()
-	return k.sendRequest(kraken.UnsubscribeEvent, kraken.TickerFeed, pairs...)
-}
-
-func (k *krakenExchange) sendRequest(event kraken.Event, feed kraken.Feed, tickers ...string) error {
+func (k *KrakenExchange) sendRequest(event kraken.Event, feed kraken.Feed, tickers ...string) error {
 	r := newRequest(event, feed)
 	r.ProductIDs = append(r.ProductIDs, tickers...)
 	reconnected, err := k.conn.WriteJSON(r)
@@ -256,57 +216,36 @@ func (k *krakenExchange) sendRequest(event kraken.Event, feed kraken.Feed, ticke
 	return nil
 }
 
-func (k *krakenExchange) updateConnection() error {
-	return k.connectionControl(k.SubscribePairs)
-}
-
-func (k *krakenExchange) closeConnection() error {
-	return k.connectionControl(k.UnsubscribePairs)
-}
-
-func (k *krakenExchange) connectionControl(operation func (pairs ...string) error) error {
+func (k *KrakenExchange) updateConnection() error {
 	pairs := make([]string, 0)
 	k.mu.RLock()
 	for pair, _ := range k.pairs {
 		pairs = append(pairs, pair)
 	}
 	k.mu.RUnlock()
-	return operation(pairs...)
+	return k.SubscribePairs(pairs...)
 }
 
-func (k *krakenExchange) CreateOrder(order *kraken.SendOrder) (*kraken.ReceiveOrder, error) {
-	return k.SendOrder(order, kraken.CreateOrder)
-}
-
-func (k *krakenExchange) GetOrders(order *kraken.SendOrder) (*kraken.ReceiveOrder, error) {
-	return k.SendOrder(order, kraken.OpenOrders)
-}
-
-func (k *krakenExchange) DeleteOrder(order *kraken.SendOrder) (*kraken.ReceiveOrder, error) {
-	return k.SendOrder(order, kraken.CancelOrder)
-}
-
-func QueryByOperation(order *kraken.SendOrder, operation kraken.OperationEndpoint) (kraken.QueryParams, error) {
-	switch operation {
-	case kraken.CreateOrder:
-		return kraken.QueryParams{
-			kraken.OrderType:  order.OrderType,
-			kraken.Symbol:     order.Symbol,
-			kraken.Side:       order.Side,
-			kraken.Size:       order.Size,
-			kraken.LimitPrice: order.LimitPrice,
-		}, nil
-
-	case kraken.OpenOrders:
-		return kraken.QueryParams{}, nil
-
-	case kraken.CancelOrder:
-		return kraken.QueryParams{
-			kraken.OrderID: order.OrderID,
-		}, nil
-
-	default:
-		return nil, kraken.ErrOperationNotFound
+func (k *KrakenExchange) CreateOrder(order domain.Order) (domain.CreateOrderResponse, error) {
+	req, err := k.sendOrder(order, kraken.CreateOrder)
+	if err != nil {
+		return domain.CreateOrderResponse{}, err
 	}
 
+	return domain.CreateOrderResponse{
+		Result:       req.Result,
+		Status:       req.SendStatus.Status,
+		OrderID:      req.SendStatus.OrderID,
+		ReceivedTime: req.SendStatus.ReceivedTime,
+	}, nil
+}
+
+// GetOrders TODO: implement
+func (k *KrakenExchange) GetOrders(order domain.Order) (*kraken.ReceiveOrder, error) {
+	return k.sendOrder(order, kraken.OpenOrders)
+}
+
+// DeleteOrder TODO: implement
+func (k *KrakenExchange) DeleteOrder(order domain.Order) (*kraken.ReceiveOrder, error) {
+	return k.sendOrder(order, kraken.CancelOrder)
 }

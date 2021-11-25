@@ -1,0 +1,16 @@
+[pair]
+# supports 1m, 2m, 10m
+period = ""
+
+[API]
+private_key = ""
+public_key = ""
+tg_bot_token = ""
+
+[database]
+address = ""
+port = ""
+name = ""
+username = ""
+password = ""
+scheme = ""
