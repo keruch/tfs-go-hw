@@ -1,11 +1,10 @@
-package candles
+package domain
 
 import (
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,9 +14,9 @@ var (
 )
 
 var (
-	test1 = domain.Candle{
+	test1 = Candle{
 		Ticker: mockPair,
-		Period: domain.CandlePeriod1m,
+		Period: CandlePeriod1m,
 		Open:   100,
 		High:   120,
 		Low:    90,
@@ -25,9 +24,9 @@ var (
 		TS:     time.Date(2020, time.April, 5, 15, 20, 0, 0, time.Local), // 15:20:00
 	}
 
-	test2 = domain.Candle{
+	test2 = Candle{
 		Ticker: mockPair,
-		Period: domain.CandlePeriod1m,
+		Period: CandlePeriod1m,
 		Open:   100,
 		High:   100,
 		Low:    90,
@@ -35,9 +34,9 @@ var (
 		TS:     time.Date(2020, time.April, 5, 15, 22, 0, 0, time.Local), // 15:22:00
 	}
 
-	test3 = domain.Candle{
+	test3 = Candle{
 		Ticker: mockPair,
-		Period: domain.CandlePeriod1m,
+		Period: CandlePeriod1m,
 		Open:   100,
 		High:   100,
 		Low:    100,
@@ -52,7 +51,7 @@ func TestGenerateCandles(t *testing.T) {
 	in := MockTickersGenerator()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	out := GenerateCandles(in, domain.CandlePeriod1m, &wg)
+	out := GenerateCandles(in, CandlePeriod1m, &wg)
 
 	_ = <-out // the first value is always invalid
 
@@ -80,45 +79,45 @@ func TestGenerateCandles(t *testing.T) {
 	wg.Wait()
 }
 
-func MockTickersGenerator() <-chan domain.Price {
-	out := make(chan domain.Price)
+func MockTickersGenerator() <-chan Price {
+	out := make(chan Price)
 
-	tickers := []domain.Price{
+	tickers := []Price{
 		// for test 1
 		{
-			Time:      domain.UnixTS(mockTime.Add(10 * time.Second)), // 15:20:20
+			Time:      UnixTS(mockTime.Add(10 * time.Second)), // 15:20:20
 			ProductID: mockPair,
 			Price:     test1.Open,
 		},
 		{
-			Time:      domain.UnixTS(mockTime.Add(20 * time.Second)), // 15:20:30,
+			Time:      UnixTS(mockTime.Add(20 * time.Second)), // 15:20:30,
 			ProductID: mockPair,
 			Price:     test1.High,
 		},
 		{
-			Time:      domain.UnixTS(mockTime.Add(30 * time.Second)), // 15:20:40,
+			Time:      UnixTS(mockTime.Add(30 * time.Second)), // 15:20:40,
 			ProductID: mockPair,
 			Price:     test1.Low,
 		},
 		{
-			Time:      domain.UnixTS(mockTime.Add(40 * time.Second)), // 15:20:50,
+			Time:      UnixTS(mockTime.Add(40 * time.Second)), // 15:20:50,
 			ProductID: mockPair,
 			Price:     test1.Close,
 		},
 		// tickers for test 2
 		{
-			Time:      domain.UnixTS(mockTime.Add(2 * time.Minute).Add(10 * time.Second)), // 15:22:20,
+			Time:      UnixTS(mockTime.Add(2 * time.Minute).Add(10 * time.Second)), // 15:22:20,
 			ProductID: mockPair,
 			Price:     test2.Open,
 		},
 		{
-			Time:      domain.UnixTS(mockTime.Add(2 * time.Minute).Add(20 * time.Second)), // 15:22:30,
+			Time:      UnixTS(mockTime.Add(2 * time.Minute).Add(20 * time.Second)), // 15:22:30,
 			ProductID: mockPair,
 			Price:     test2.Close,
 		},
 		// tickers for test 3
 		{
-			Time:      domain.UnixTS(mockTime.Add(4 * time.Minute).Add(40 * time.Second)), // 15:24:50,
+			Time:      UnixTS(mockTime.Add(4 * time.Minute).Add(40 * time.Second)), // 15:24:50,
 			ProductID: "TEST_TICKER",
 			Price:     test3.Open,
 		},

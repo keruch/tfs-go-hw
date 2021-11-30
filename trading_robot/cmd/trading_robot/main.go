@@ -5,19 +5,16 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strconv"
 	"sync"
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	"github.com/keruch/tfs-go-hw/trading_robot/config"
-	"github.com/keruch/tfs-go-hw/trading_robot/internal/candles"
-	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/exchange"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/indicator"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/processor"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/repository"
+	"github.com/keruch/tfs-go-hw/trading_robot/internal/router"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/tg"
 )
@@ -38,20 +35,20 @@ func main() {
 	logger := log.NewLogger()
 	err := config.SetupConfig()
 	if err != nil {
-		logger.Fatalf("Setup config failed: %s",err)
+		logger.Fatalf("Setup config failed: %s", err)
 	}
 	logger.Info("Setup config")
 
 	// setup strategy
-	strat := SetupStrategy()
+	strategy := SetupStrategy()
 	logger.Info("Setup strategy")
 
 	// setup exchange
-	ex, err := exchange.NewKrakenExchange(logger)
+	kraken, err := exchange.NewKrakenExchange(logger)
 	if err != nil {
-		logger.Fatalf("Setup exchange failed: %s",err)
+		logger.Fatalf("Setup exchange failed: %s", err)
 	}
-	defer ex.CloseConnection()
+	defer kraken.CloseConnection()
 	logger.Info("Setup exchange")
 
 	// setup repository
@@ -62,131 +59,75 @@ func main() {
 	logger.Info("Setup repository")
 
 	// setup telegram bot
-	tgBot, err := tg.NewTelegramBot(config.GetTelegramBotToken(), logger)
+	telegram, err := tg.NewTelegramBot(config.GetTelegramBotToken(), logger)
 	if err != nil {
-		logger.Fatalf("Setup telegram failed: %s",err)
+		logger.Fatalf("Setup telegram failed: %s", err)
 	}
 	logger.Info("Setup telegram bot")
 
 	// setup orders processor
-	proc := processor.NewOrdersProcessor(strat, repo, ex, tgBot, logger)
+	proc := processor.NewOrdersProcessor(strategy, repo, kraken, telegram, logger)
 	logger.Info("Setup processor")
 
-	// setup signals handler
-	shutdown := make(chan os.Signal, 1)
-	signal.Notify(shutdown, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-
-	// POST /pair - to change pair
-	// POST /indicator/{params} - for indicator
-	// POST /operations/shutdown - for shutdown
-	// (?) POST /operations/start - for start
-	// (?) POST /operations/stop - for stop
-
 	// setup router
-	router := mux.NewRouter()
-	router.Methods(http.MethodPost).PathPrefix(domain.SubscribePair).HandlerFunc(
-		func(writer http.ResponseWriter, request *http.Request) {
-			vars := mux.Vars(request)
-			ticker := vars[domain.PairVar]
-			err = ex.SubscribePairs(ticker)
-			if err != nil {
-				logger.Errorf("%s endpoint: %s", domain.SubscribePair, err)
-				writer.WriteHeader(http.StatusBadRequest)
-			}
-		})
-
-	router.Methods(http.MethodPost).PathPrefix(domain.UnsubscribePair).HandlerFunc(
-		func(writer http.ResponseWriter, request *http.Request) {
-			vars := mux.Vars(request)
-			ticker := vars[domain.PairVar]
-			err = ex.UnsubscribePairs(ticker)
-			if err != nil {
-				logger.Errorf("%s endpoint: %s", domain.UnsubscribePair, err)
-				writer.WriteHeader(http.StatusBadRequest)
-			}
-		})
-
-	router.Methods(http.MethodPost).PathPrefix(domain.SetQuantity).HandlerFunc(
-		func(writer http.ResponseWriter, request *http.Request) {
-			vars := mux.Vars(request)
-			quantity := vars[domain.ValueVal]
-			quantityInt, err := strconv.Atoi(quantity)
-			if err != nil {
-				logger.Errorf("%s endpoint: %s", domain.SetQuantity, err)
-				writer.WriteHeader(http.StatusBadRequest)
-			}
-			proc.SetTradingQuantity(quantityInt)
-		})
-
-	router.Methods(http.MethodPost).PathPrefix(domain.SetMultiplier).HandlerFunc(
-		func(writer http.ResponseWriter, request *http.Request) {
-			vars := mux.Vars(request)
-			multiplier := vars[domain.ValueVal]
-			multiplierFloat, err := strconv.ParseFloat(multiplier, 32);
-			if err != nil {
-				logger.Errorf("%s endpoint: %s", domain.SetMultiplier, err)
-				writer.WriteHeader(http.StatusBadRequest)
-			}
-			proc.SetPriceMultiplier(multiplierFloat)
-		})
-
-	router.Methods(http.MethodPost).PathPrefix(domain.ShutdownOperation).HandlerFunc(
-		func(writer http.ResponseWriter, request *http.Request) {
-			shutdown <- syscall.SIGINT
-		})
+	r := router.NewRouter(kraken, proc, logger)
+	logger.Info("Setup router")
 
 	// setup server
 	srv := &http.Server{
-		Handler:      router,
-		Addr:         ":8091",
+		Handler:      r,
+		Addr:         config.GetServerAddress(),
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+	logger.Info("Setup server")
 
-	// start server
-	go func() {
-		logger.Info("Setup server")
-		if err = srv.ListenAndServe(); err != nil {
-			logger.Infof("ListenAndServe: %s", err)
-		}
-	}()
-
-	ctx, cancel := context.WithCancel(context.Background())
+	botCtx, botShutdown := context.WithCancel(context.Background())
 
 	// start tg bot
-	tgBot.Serve(ctx)
+	//go telegram.Serve(botCtx)
 
-	var wg sync.WaitGroup
-	// get prices from exchange
-	prices := ex.GetPrices(ctx)
+	// start processing
+	var shutdownWait sync.WaitGroup
+	proc.StartTradingBotProcessor(botCtx, &shutdownWait)
 
-	// generate candles from prices
-	wg.Add(1)
-	candle := candles.GenerateCandles(prices, config.GetPeriod(), &wg)
-
-	//skip the first candle (she is invalid)
-	<-candle
-
-	// run processor
-	wg.Add(1)
-	proc.ProcessCandles(candle, &wg)
-	logger.Info("Processing candles...")
-
-	<-shutdown
-	ctxTimeout, cancelTimeout := context.WithTimeout(context.Background(), 3*time.Second)
+	// setup signals handler
+	shutdownSig := make(chan os.Signal, 1)
+	signal.Notify(shutdownSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	go func() {
-		if err = srv.Shutdown(ctxTimeout); err != nil {
+		<-shutdownSig
+
+		// give 5 seconds to shutdown
+		forceShutdownCtx, forceShutdown := context.WithTimeout(botCtx, time.Second*5)
+		go func() {
+			<-forceShutdownCtx.Done()
+			if forceShutdownCtx.Err() == context.DeadlineExceeded {
+				logger.Fatal("graceful shutdown timed out, forcing exit")
+			}
+			forceShutdown()
+		}()
+
+		// Trigger graceful shutdown
+		err = srv.Shutdown(forceShutdownCtx)
+		if err != nil {
 			logger.Fatal(err)
 		}
-		cancelTimeout()
 		logger.Info("Server done")
+
+		botShutdown()
+		err = kraken.CloseConnection()
+		if err != nil {
+			logger.Fatal(err)
+		}
+		logger.Info("WS exchange connection done")
 	}()
 
-	cancel()
-	wg.Wait()
+	if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Fatalf("ListenAndServe: %s", err)
+	}
+	
+	shutdownWait.Wait()
 
-	<-ctxTimeout.Done()
-
-	logger.Infof("Trading robot close.")
+	logger.Infof("Trading robot close")
 }

@@ -2,10 +2,10 @@ package domain
 
 import (
 	"errors"
+	"sync"
 	"time"
 )
 
-// Candle TODO: move to candles path
 type Candle struct {
 	Ticker string
 	Period CandlePeriod // Интервал
@@ -64,3 +64,43 @@ func PeriodTS(period CandlePeriod, ts time.Time) (time.Time, error) {
 		return time.Time{}, ErrUnknownPeriod
 	}
 }
+
+func GenerateCandles(in <-chan Price, period CandlePeriod, wg *sync.WaitGroup) <-chan Candle {
+	out := make(chan Candle)
+
+	go func() {
+		defer wg.Done()
+		defer close(out)
+
+		var (
+			startPeriod = false
+			currentTS   time.Time
+			candle      Candle
+		)
+		for price := range in {
+			candleTS, err := PeriodTS(period, time.Time(price.Time))
+			if err != nil {
+				panic(err)
+			}
+
+			if candleTS != currentTS {
+				currentTS = candleTS
+				startPeriod = true
+			}
+
+			if startPeriod {
+				// skip nil candles
+				if candle.Close != 0 {
+					out <- candle
+				}
+				candle = NewCandle(price, period, candleTS)
+				startPeriod = false
+			}
+
+			candle = Update(candle, price)
+		}
+	}()
+
+	return out
+}
+

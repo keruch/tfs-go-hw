@@ -10,7 +10,7 @@ import (
 
 type krakenEnvironment struct {
 	suite.Suite
-	ex Exchange
+	ex *KrakenExchange
 }
 
 func (k *krakenEnvironment) SetupSuite() {

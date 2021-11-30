@@ -41,26 +41,24 @@ func (tg *TelegramBot) Serve(ctx context.Context) {
 
 	updates := tg.bot.GetUpdatesChan(u)
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				tg.logger.Info("Telegram bot: serve done")
-				return
-			case update := <-updates:
-				if update.Message == nil {
-					continue
-				}
+	for {
+		select {
+		case <-ctx.Done():
+			tg.logger.Info("Telegram bot: serve done")
+			return
+		case update := <-updates:
+			if update.Message == nil {
+				continue
+			}
 
-				if update.Message.Text == startMsg {
-					tg.addUser(update.Message.From.UserName, update.Message.Chat.ID)
-				} else if update.Message.Text == stopMsg {
-					tg.removeUser(update.Message.From.UserName)
-				}
+			if update.Message.Text == startMsg {
+				tg.addUser(update.Message.From.UserName, update.Message.Chat.ID)
+			} else if update.Message.Text == stopMsg {
+				tg.removeUser(update.Message.From.UserName)
 			}
 		}
+	}
 
-	}()
 }
 
 func (tg *TelegramBot) NotifyUsers(message string) {

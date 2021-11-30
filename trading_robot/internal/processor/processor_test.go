@@ -6,7 +6,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/keruch/tfs-go-hw/trading_robot/config"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
 	"github.com/stretchr/testify/mock"
@@ -66,10 +65,6 @@ type Environment struct {
 }
 
 func (e *Environment) SetupSuite() {
-	if err := config.SetupConfig(); err != nil {
-		e.T().Fatal(err)
-	}
-
 	e.controller = new(OrdersSenderMock)
 	e.repo = new(RepoMock)
 	e.strategy = new(StrategyMock)
@@ -149,7 +144,7 @@ func (e *Environment) TestProcessor() {
 	}()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	processor.ProcessCandles(out, &wg)
+	go processor.ProcessCandles(out, &wg)
 	wg.Wait()
 }
 

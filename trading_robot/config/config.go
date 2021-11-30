@@ -48,3 +48,7 @@ func GetDatabaseURL() string {
 func GetTelegramBotToken() string {
 	return viper.GetString("API.tg_bot_token")
 }
+
+func GetServerAddress() string {
+	return viper.GetString("server.address")
+}

@@ -59,7 +59,7 @@ func (cs *CandlesService) GenerateCandles(ctx context.Context) error {
 
 	wg.Wait()
 
-	cs.Logger.Info("Generating candles done!")
+	cs.Logger.Info("Generating candles_generator done!")
 
 	return nil
 }

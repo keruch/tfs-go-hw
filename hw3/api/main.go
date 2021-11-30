@@ -41,7 +41,7 @@ func main() {
 	cs := services.NewCandlesService(repo, logger)
 	err := cs.GenerateCandles(ctx)
 	if err != nil {
-		logger.Errorf("Error while generating candles: %v", err)
+		logger.Errorf("Error while generating candles_generator: %v", err)
 		return
 	}
 }
