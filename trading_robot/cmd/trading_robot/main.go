@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/processor"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/repository"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
+	"github.com/keruch/tfs-go-hw/trading_robot/pkg/tg"
 )
 
 func SetupStrategy() indicator.Strategy {
@@ -36,8 +38,9 @@ func main() {
 	logger := log.NewLogger()
 	err := config.SetupConfig()
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("Setup config failed: %s",err)
 	}
+	logger.Info("Setup config")
 
 	// setup strategy
 	strat := SetupStrategy()
@@ -46,7 +49,7 @@ func main() {
 	// setup exchange
 	ex, err := exchange.NewKrakenExchange(logger)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("Setup exchange failed: %s",err)
 	}
 	defer ex.CloseConnection()
 	logger.Info("Setup exchange")
@@ -54,31 +57,22 @@ func main() {
 	// setup repository
 	repo, err := repository.NewPostgreSQLPool(config.GetDatabaseURL(), logger)
 	if err != nil {
-		logger.Fatal(err)
+		logger.Fatalf("Setup repository failed: %s", err)
 	}
 	logger.Info("Setup repository")
 
+	// setup telegram bot
+	tgBot, err := tg.NewTelegramBot(config.GetTelegramBotToken(), logger)
+	if err != nil {
+		logger.Fatalf("Setup telegram failed: %s",err)
+	}
+	logger.Info("Setup telegram bot")
+
 	// setup orders processor
-	proc := processor.NewOrdersProcessor(strat, repo, ex, logger)
+	proc := processor.NewOrdersProcessor(strat, repo, ex, tgBot, logger)
 	logger.Info("Setup processor")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-	// get prices from exchange
-	prices := ex.GetPrices(ctx)
-
-	// generate candles from prices
-	wg.Add(1)
-	candle := candles.GenerateCandles(prices, config.GetPeriod(), &wg)
-
-	//skip the first candle (she is invalid)
-	//<-candle
-
-	// run processor
-	wg.Add(1)
-	proc.ProcessCandles(candle, &wg)
-	logger.Info("Processing candles...")
-
+	// setup signals handler
 	shutdown := make(chan os.Signal, 1)
 	signal.Notify(shutdown, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
@@ -88,6 +82,7 @@ func main() {
 	// (?) POST /operations/start - for start
 	// (?) POST /operations/stop - for stop
 
+	// setup router
 	router := mux.NewRouter()
 	router.Methods(http.MethodPost).PathPrefix(domain.SubscribePair).HandlerFunc(
 		func(writer http.ResponseWriter, request *http.Request) {
@@ -111,11 +106,36 @@ func main() {
 			}
 		})
 
-	router.Methods(http.MethodPost).PathPrefix(domain.ShutdownOperation).HandlerFunc(
+	router.Methods(http.MethodPost).PathPrefix(domain.SetQuantity).HandlerFunc(
 		func(writer http.ResponseWriter, request *http.Request) {
-			shutdown <- os.Interrupt
+			vars := mux.Vars(request)
+			quantity := vars[domain.ValueVal]
+			quantityInt, err := strconv.Atoi(quantity)
+			if err != nil {
+				logger.Errorf("%s endpoint: %s", domain.SetQuantity, err)
+				writer.WriteHeader(http.StatusBadRequest)
+			}
+			proc.SetTradingQuantity(quantityInt)
 		})
 
+	router.Methods(http.MethodPost).PathPrefix(domain.SetMultiplier).HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			vars := mux.Vars(request)
+			multiplier := vars[domain.ValueVal]
+			multiplierFloat, err := strconv.ParseFloat(multiplier, 32);
+			if err != nil {
+				logger.Errorf("%s endpoint: %s", domain.SetMultiplier, err)
+				writer.WriteHeader(http.StatusBadRequest)
+			}
+			proc.SetPriceMultiplier(multiplierFloat)
+		})
+
+	router.Methods(http.MethodPost).PathPrefix(domain.ShutdownOperation).HandlerFunc(
+		func(writer http.ResponseWriter, request *http.Request) {
+			shutdown <- syscall.SIGINT
+		})
+
+	// setup server
 	srv := &http.Server{
 		Handler:      router,
 		Addr:         ":8091",
@@ -123,12 +143,34 @@ func main() {
 		ReadTimeout:  15 * time.Second,
 	}
 
+	// start server
 	go func() {
 		logger.Info("Setup server")
 		if err = srv.ListenAndServe(); err != nil {
 			logger.Infof("ListenAndServe: %s", err)
 		}
 	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// start tg bot
+	tgBot.Serve(ctx)
+
+	var wg sync.WaitGroup
+	// get prices from exchange
+	prices := ex.GetPrices(ctx)
+
+	// generate candles from prices
+	wg.Add(1)
+	candle := candles.GenerateCandles(prices, config.GetPeriod(), &wg)
+
+	//skip the first candle (she is invalid)
+	<-candle
+
+	// run processor
+	wg.Add(1)
+	proc.ProcessCandles(candle, &wg)
+	logger.Info("Processing candles...")
 
 	<-shutdown
 	ctxTimeout, cancelTimeout := context.WithTimeout(context.Background(), 3*time.Second)

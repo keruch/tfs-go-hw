@@ -30,10 +30,13 @@ func NewPostgreSQLPool(url string, logger *log.Logger) (*PostgreSQLPool, error) 
 	}, nil
 }
 
-const insertTemplate = "insert into orders (order_id, TS, status, price) values ('%s', '%s', '%s', %v);"
+const insertTemplate = `insert into orders 
+(order_id, TS, order_type, symbol, status, side, quantity, price) 
+values ('%s', '%s', '%s', '%s', '%s', '%s', %v,  %v);`
 
-func (p *PostgreSQLPool) StoreToDB(ctx context.Context, response domain.CreateOrderResponse, price float64) error {
-	insertCommand := fmt.Sprintf(insertTemplate, response.OrderID, response.ReceivedTime, response.Status, price)
+func (p *PostgreSQLPool) StoreToDB(ctx context.Context, r domain.CreateOrderResponse) error {
+	insertCommand := fmt.Sprintf(insertTemplate,
+		r.OrderID, r.ReceivedTime, r.OrderType, r.Symbol, r.Status, r.Side, r.Size, r.LimitPrice)
 	if _, err := p.pool.Query(ctx, insertCommand); err != nil {
 		return err
 	}

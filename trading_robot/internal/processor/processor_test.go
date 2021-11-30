@@ -17,8 +17,8 @@ type RepoMock struct {
 	mock.Mock
 }
 
-func (r *RepoMock) StoreToDB(ctx context.Context, response domain.CreateOrderResponse, price float64) error {
-	args := r.Called(ctx, response, price)
+func (r *RepoMock) StoreToDB(ctx context.Context, response domain.CreateOrderResponse) error {
+	args := r.Called(ctx, response)
 	return args.Error(0)
 }
 
@@ -49,22 +49,12 @@ func (s *StrategyMock) Short() bool {
 	return args.Bool(0)
 }
 
-type StopTakerMock struct {
+type NotifierMock struct {
 	mock.Mock
 }
 
-func (s *StopTakerMock) Update(p float64) {
-	s.Called(p)
-}
-
-func (s *StopTakerMock) StopLoss() float64 {
-	args := s.Called()
-	return args.Get(0).(float64)
-}
-
-func (s *StopTakerMock) TakeProfit() float64 {
-	args := s.Called()
-	return args.Get(0).(float64)
+func (n *NotifierMock) NotifyUsers(message string) {
+	n.Called(message)
 }
 
 type Environment struct {
@@ -72,6 +62,7 @@ type Environment struct {
 	repo       *RepoMock
 	controller *OrdersSenderMock
 	strategy   *StrategyMock
+	notifier   *NotifierMock
 }
 
 func (e *Environment) SetupSuite() {
@@ -82,15 +73,22 @@ func (e *Environment) SetupSuite() {
 	e.controller = new(OrdersSenderMock)
 	e.repo = new(RepoMock)
 	e.strategy = new(StrategyMock)
+	e.notifier = new(NotifierMock)
 }
 
 func (e *Environment) TearDownSuite() {
 	e.controller.AssertExpectations(e.T())
 	e.repo.AssertExpectations(e.T())
 	e.strategy.AssertExpectations(e.T())
+	e.notifier.AssertExpectations(e.T())
 }
 
 var validResponse = domain.CreateOrderResponse{
+	OrderType:    "ioc",
+	Symbol:       "TEST_SYM",
+	Side:         "sell",
+	Size:         100,
+	LimitPrice:   4213.1,
 	Result:       "success",
 	Status:       "placed",
 	OrderID:      "8dcdbe17-b729-4fef-8b89-36e561535f38",
@@ -100,7 +98,7 @@ var validResponse = domain.CreateOrderResponse{
 func (e *Environment) TestProcessor() {
 	logger := log.NewLogger()
 	logger.SetLevel(0) // set panic level to prevent output spam
-	processor := NewOrdersProcessor(e.strategy, e.repo, e.controller, &StopTakerMock{}, logger)
+	processor := NewOrdersProcessor(e.strategy, e.repo, e.controller, e.notifier, logger)
 
 	testID := 0
 	e.T().Logf("\tTest %d:\tprocessor all success long", testID)
@@ -108,7 +106,8 @@ func (e *Environment) TestProcessor() {
 		e.strategy.On("Update", mock.Anything).Once()
 		e.strategy.On("Long").Return(true).Once()
 		e.controller.On("CreateOrder", mock.Anything).Return(validResponse, nil).Once()
-		e.repo.On("StoreToDB", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		e.repo.On("StoreToDB", mock.Anything, mock.Anything).Return(nil).Once()
+		e.notifier.On("NotifyUsers", mock.Anything).Return().Once()
 	}
 
 	testID++
@@ -118,7 +117,8 @@ func (e *Environment) TestProcessor() {
 		e.strategy.On("Long").Return(false).Once()
 		e.strategy.On("Short").Return(true).Once()
 		e.controller.On("CreateOrder", mock.Anything).Return(validResponse, nil).Once()
-		e.repo.On("StoreToDB", mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		e.repo.On("StoreToDB", mock.Anything, mock.Anything).Return(nil).Once()
+		e.notifier.On("NotifyUsers", mock.Anything).Return().Once()
 	}
 
 	testID++
@@ -135,10 +135,11 @@ func (e *Environment) TestProcessor() {
 		e.strategy.On("Update", mock.Anything).Once()
 		e.strategy.On("Long").Return(true).Once()
 		e.controller.On("CreateOrder", mock.Anything).Return(validResponse, nil).Once()
-		e.repo.On("StoreToDB", mock.Anything, mock.Anything, mock.Anything).Return(errors.New("store error")).Once()
+		e.repo.On("StoreToDB", mock.Anything, mock.Anything).Return(errors.New("store error")).Once()
+		e.notifier.On("NotifyUsers", mock.Anything).Return().Once()
 	}
 
-	candles := []domain.Candle{{Close: 4}, {Close: 5}, {Close: 8}, {Close: 10}}
+	candles := []domain.Candle{{Close: 4, Ticker: "TEST"}, {Close: 5, Ticker: "TEST"}, {Close: 8, Ticker: "TEST"}, {Close: 10, Ticker: "TEST"}}
 	out := make(chan domain.Candle)
 	go func() {
 		defer close(out)

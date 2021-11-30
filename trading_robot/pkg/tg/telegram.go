@@ -54,7 +54,7 @@ func (tg *TelegramBot) Serve(ctx context.Context) {
 
 				if update.Message.Text == startMsg {
 					tg.addUser(update.Message.From.UserName, update.Message.Chat.ID)
-				} else if update.Message.Text != stopMsg {
+				} else if update.Message.Text == stopMsg {
 					tg.removeUser(update.Message.From.UserName)
 				}
 			}

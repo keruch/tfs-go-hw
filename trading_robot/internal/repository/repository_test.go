@@ -13,7 +13,7 @@ import (
 
 type DatabaseSuite struct {
 	suite.Suite
-	repo   Repository
+	repo   *PostgreSQLPool
 	logger *log.Logger
 }
 
@@ -34,28 +34,38 @@ func (db *DatabaseSuite) SetupSuite() {
 
 func (db *DatabaseSuite) TestStoreToDB() {
 	testID := 0
-	db.logger.Infof("\tTest %d:\tcreate transaction no error", testID)
+	db.T().Logf("\tTest %d:\tcreate transaction no error", testID)
 	{
 		respOrder := domain.CreateOrderResponse{
+			OrderType:    "ioc",
+			Symbol:       "TEST_SYM",
+			Side:         "sell",
+			Size:         100,
+			LimitPrice:   4213.1,
 			Result:       "success",
 			Status:       "placed",
 			OrderID:      "8dcdbe17-b729-4fef-8b89-36e561535f38",
 			ReceivedTime: "2021-11-25T19:05:03.670Z",
 		}
-		err := db.repo.StoreToDB(context.Background(), respOrder, 5242)
+		err := db.repo.StoreToDB(context.Background(), respOrder)
 		db.NoError(err)
 	}
 
 	testID++
-	db.logger.Infof("\tTest %d:\tcreate transaction error", testID)
+	db.T().Logf("\tTest %d:\tcreate transaction error", testID)
 	{
 		respOrder := domain.CreateOrderResponse{
+			OrderType:    "ioc",
+			Symbol:       "TEST_SYM",
+			Side:         "sell",
+			Size:         100,
+			LimitPrice:   4213.1,
 			Result:       "success",
 			Status:       "placed",
 			OrderID:      "8dcdbe17-b729-4fef-8b89-36e561535f38",
 			ReceivedTime: "5435qgs4hv2nq4nugfg",
 		}
-		err := db.repo.StoreToDB(context.Background(), respOrder, 3425)
+		err := db.repo.StoreToDB(context.Background(), respOrder)
 		db.Error(err)
 	}
 }

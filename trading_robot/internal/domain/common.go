@@ -11,11 +11,10 @@ const (
 	SubscribePair   = "/subscribe/{pair}"
 	PairVar         = "pair"
 
-	IndexEndpoint      = "/indicator/{params}"
-
 	ShutdownOperation = "/shutdown"
-	StartOperation    = "/start"
-	StopOperation     = "/stop"
+	SetQuantity       = "/quantity/{value}"
+	SetMultiplier     = "/multiplier/{value}"
+	ValueVal          = "value"
 )
 
 type OrderType string
@@ -63,19 +62,37 @@ type Order struct {
 }
 
 type CreateOrderResponse struct {
-	Result         string `json:"result,omitempty"`
-	Status         string `json:"status,omitempty"`
-	OrderID        string `json:"order_id,omitempty"`
-	ReceivedTime   string `json:"receivedTime,omitempty"`
-	OrderEventType string `json:"order_event_type"`
+	OrderType      string  `json:"orderType,omitempty"`
+	Symbol         string  `json:"symbol,omitempty"`
+	Side           string  `json:"side,omitempty"`
+	Size           int     `json:"size,omitempty"`
+	LimitPrice     float64 `json:"limitPrice,omitempty"`
+	Result         string  `json:"result,omitempty"`
+	Status         string  `json:"status,omitempty"`
+	OrderID        string  `json:"order_id,omitempty"`
+	ReceivedTime   string  `json:"receivedTime,omitempty"`
+	OrderEventType string  `json:"order_event_type"`
 }
 
-func CreateIocOrder(orderType OrderType, pair string, price float64, quanity int) Order {
+func (r CreateOrderResponse) String() string {
+	return fmt.Sprintf(`Created new order:
+OrderType: %s
+Symbol: %s
+Side: %s
+Size: %v
+LimitPrice: %v
+Result: %s
+Status: %s
+OrderID: %s
+Time: %s`, r.OrderType, r.Symbol, r.Side, r.Size, r.LimitPrice, r.Result, r.Status, r.OrderID, r.ReceivedTime)
+}
+
+func CreateIocOrder(orderType OrderType, pair string, price float64, quantity int) Order {
 	return Order{
 		OrderType:  IocOrder,
 		Symbol:     pair,
 		Side:       string(orderType),
-		Size:       quanity,
+		Size:       quantity,
 		LimitPrice: price,
 	}
 }

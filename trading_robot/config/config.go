@@ -31,16 +31,8 @@ func GetPublicKey() string {
 	return viper.GetString("API.public_key")
 }
 
-func GetPair() string {
-	return viper.GetString("pair.name")
-}
-
 func GetPeriod() domain.CandlePeriod {
 	return domain.CandlePeriod(viper.GetString("pair.period"))
-}
-
-func GetOrderSize() int {
-	return viper.GetInt("pair.order_size")
 }
 
 func GetDatabaseURL() string {

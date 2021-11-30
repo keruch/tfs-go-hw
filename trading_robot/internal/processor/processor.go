@@ -13,26 +13,34 @@ type OrdersProcessor struct {
 	strategy   indicator.Strategy
 	repo       Repository
 	controller OrdersSender
+	notifier   OrderNotifier
 	logger     *log.Logger
 
-	PriceMultiplier *float64 // pointer to change it in runtime
-	TradingQuanity  *int
+	PriceMultiplier float64 // pointer to change it in runtime
+	TradingQuantity int
 }
 
 type Repository interface {
-	StoreToDB(ctx context.Context, response domain.CreateOrderResponse, price float64) error
+	StoreToDB(ctx context.Context, response domain.CreateOrderResponse) error
 }
 
 type OrdersSender interface {
-	CreateOrder(order domain.Order) (response domain.CreateOrderResponse, err error)
+	CreateOrder(order domain.Order) (domain.CreateOrderResponse, error)
 }
 
-func NewOrdersProcessor(s indicator.Strategy, r Repository, c OrdersSender, l *log.Logger) *OrdersProcessor {
+type OrderNotifier interface {
+	NotifyUsers(message string)
+}
+
+func NewOrdersProcessor(s indicator.Strategy, r Repository, c OrdersSender, n OrderNotifier, l *log.Logger) *OrdersProcessor {
 	return &OrdersProcessor{
 		strategy:   s,
 		repo:       r,
 		controller: c,
+		notifier:   n,
 		logger:     l,
+
+		TradingQuantity: 100,
 	}
 }
 
@@ -54,11 +62,11 @@ func (p *OrdersProcessor) ProcessCandles(candles <-chan domain.Candle, wg *sync.
 			p.strategy.Update(price)
 
 			if p.strategy.Long() {
-				price *= 1.0 + *p.PriceMultiplier
-				orderInfo, err = p.controller.CreateOrder(domain.CreateIocOrder(domain.BuyOrder, candle.Ticker, price, *p.TradingQuanity))
+				price *= 1.0 + p.PriceMultiplier
+				orderInfo, err = p.controller.CreateOrder(domain.CreateIocOrder(domain.BuyOrder, candle.Ticker, price, p.TradingQuantity))
 			} else if p.strategy.Short() {
-				price *= 1.0 -* p.PriceMultiplier
-				orderInfo, err = p.controller.CreateOrder(domain.CreateIocOrder(domain.SellOrder, candle.Ticker, price, *p.TradingQuanity))
+				price *= 1.0 - p.PriceMultiplier
+				orderInfo, err = p.controller.CreateOrder(domain.CreateIocOrder(domain.SellOrder, candle.Ticker, price, p.TradingQuantity))
 			}
 
 			if err != nil {
@@ -67,14 +75,23 @@ func (p *OrdersProcessor) ProcessCandles(candles <-chan domain.Candle, wg *sync.
 			}
 
 			if orderInfo.Status == "placed" {
-				if err = p.repo.StoreToDB(context.Background(), orderInfo, price); err != nil {
+				err = p.repo.StoreToDB(context.Background(), orderInfo)
+				if err != nil {
 					p.logger.Error(err)
-					continue
 				}
+				p.notifier.NotifyUsers(orderInfo.String())
 				p.logger.Infof("Created new order: id = %v, price = %v", orderInfo.OrderID, price)
 			}
 		}
 		p.logger.Info("Candles processing done")
 	}()
 
+}
+
+func (p *OrdersProcessor) SetPriceMultiplier(m float64) {
+	p.PriceMultiplier = m
+}
+
+func (p *OrdersProcessor) SetTradingQuantity(q int) {
+	p.TradingQuantity = q
 }

@@ -233,6 +233,11 @@ func (k *KrakenExchange) CreateOrder(order domain.Order) (domain.CreateOrderResp
 	}
 
 	return domain.CreateOrderResponse{
+		OrderType:    order.OrderType,
+		Symbol:       order.Symbol,
+		Side:         order.Side,
+		Size:         order.Size,
+		LimitPrice:   order.LimitPrice,
 		Result:       req.Result,
 		Status:       req.SendStatus.Status,
 		OrderID:      req.SendStatus.OrderID,
