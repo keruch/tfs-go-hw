@@ -11,24 +11,13 @@ import (
 
 	"github.com/keruch/tfs-go-hw/trading_robot/config"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/exchange"
-	"github.com/keruch/tfs-go-hw/trading_robot/internal/indicator"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/processor"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/repository"
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/router"
+	"github.com/keruch/tfs-go-hw/trading_robot/pkg/indicator"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/log"
 	"github.com/keruch/tfs-go-hw/trading_robot/pkg/tg"
 )
-
-func SetupStrategy() indicator.Strategy {
-	alphaFunc := func(p int) float64 {
-		return 2 / float64(p+1)
-	}
-	period := 100
-	//macd := NewMACDEvaluator(12, 26, 9, alphaFunc)
-	ema := indicator.NewEMAEvaluator(period, alphaFunc)
-	//NewMACDStrategy(macd)
-	return indicator.NewStrategiesComposition(indicator.NewEMAStrategy(ema))
-}
 
 func main() {
 	// setup logger and config
@@ -40,7 +29,7 @@ func main() {
 	logger.Info("Setup config")
 
 	// setup strategy
-	strategy := SetupStrategy()
+	strategy := indicator.SetupEMA100Strategy()
 	logger.Info("Setup strategy")
 
 	// setup exchange
@@ -126,7 +115,7 @@ func main() {
 	if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		logger.Fatalf("ListenAndServe: %s", err)
 	}
-	
+
 	shutdownWait.Wait()
 
 	logger.Infof("Trading robot close")

@@ -45,3 +45,12 @@ func (sc StrategiesComposition) Short() bool {
 
 	return short && !long
 }
+
+func SetupEMA100Strategy() Strategy {
+	alphaFunc := func(p int) float64 {
+		return 2 / float64(p+1)
+	}
+	period := 100
+	ema := NewEMAEvaluator(period, alphaFunc)
+	return NewStrategiesComposition(NewEMAStrategy(ema))
+}

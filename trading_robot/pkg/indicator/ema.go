@@ -1,6 +1,10 @@
 package indicator
 
+import "sync"
+
 type EMAEvaluator struct {
+	mu sync.RWMutex // mutex to protect ema evaluator
+
 	counter int     // value counter
 	ema     float64 // EMA value
 	alpha   float64 // alpha coefficient
@@ -25,6 +29,8 @@ func EMA(pEMA float64, p float64, alpha float64) float64 {
 }
 
 func (e *EMAEvaluator) UpdateEMA(p float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.counter++
 	if e.counter == 1 {
 		e.ema = p
@@ -33,10 +39,14 @@ func (e *EMAEvaluator) UpdateEMA(p float64) {
 }
 
 func (e *EMAEvaluator) GetEMA() float64 {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.ema
 }
 
 type EMAStrategy struct {
+	mu sync.RWMutex // mutex to protect strategy
+
 	ema      *EMAEvaluator
 	curPrice float64
 }
@@ -48,14 +58,20 @@ func NewEMAStrategy(ema *EMAEvaluator) Strategy {
 }
 
 func (e *EMAStrategy) Update(p float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	e.ema.UpdateEMA(p)
 	e.curPrice = p
 }
 
 func (e *EMAStrategy) Long() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.curPrice > e.ema.GetEMA()
 }
 
 func (e *EMAStrategy) Short() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
 	return e.curPrice < e.ema.GetEMA()
 }
