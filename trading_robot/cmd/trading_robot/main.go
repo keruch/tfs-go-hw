@@ -76,6 +76,7 @@ func main() {
 	// start tg bot
 	//go telegram.Serve(botCtx)
 
+	logger.Info("Setup server")
 	// start processing
 	var shutdownWait sync.WaitGroup
 	proc.StartTradingBotProcessor(botCtx, &shutdownWait)
