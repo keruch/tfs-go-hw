@@ -15,7 +15,7 @@ func TestNewCandle(t *testing.T) {
 	{
 		price := Price{
 			ProductID: "TEST",
-			Price:  100,
+			Price:     100,
 		}
 		TS := time.Date(2020, time.April, 5, 15, 20, 0, 0, time.Local) // 15:20:00
 		candle := NewCandle(price, CandlePeriod1m, TS)
@@ -51,7 +51,7 @@ func TestUpdate(t *testing.T) {
 	{
 		price := Price{
 			ProductID: "TEST",
-			Price:  200,
+			Price:     200,
 		}
 		candle = Update(candle, price)
 		a.Equalf(200.0, candle.High, "High prices should be equal")
@@ -63,7 +63,7 @@ func TestUpdate(t *testing.T) {
 	{
 		price := Price{
 			ProductID: "TEST",
-			Price:  50,
+			Price:     50,
 		}
 		candle = Update(candle, price)
 		a.Equalf(50.0, candle.Low, "Low prices should be equal")
@@ -112,4 +112,3 @@ func TestPeriodTS(t *testing.T) {
 		a.Equalf(ErrUnknownPeriod, err, "Errors should be equal")
 	}
 }
-

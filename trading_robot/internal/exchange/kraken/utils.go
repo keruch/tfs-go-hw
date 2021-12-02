@@ -73,5 +73,4 @@ func QueryByOperation(order domain.Order, operation OperationEndpoint) (QueryPar
 	default:
 		return nil, ErrOperationNotFound
 	}
-
 }

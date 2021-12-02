@@ -24,7 +24,7 @@ func main() {
 	logger := log.NewLogger()
 	err := config.SetupConfig()
 	if err != nil {
-		logger.Fatalf("Setup config failed: %s", err)
+		logger.Panicf("Setup config failed: %s", err)
 	}
 	logger.Info("Setup config")
 
@@ -35,7 +35,7 @@ func main() {
 	// setup exchange
 	kraken, err := exchange.NewKrakenExchange(logger)
 	if err != nil {
-		logger.Fatalf("Setup exchange failed: %s", err)
+		logger.Panicf("Setup exchange failed: %s", err)
 	}
 	defer kraken.CloseConnection()
 	logger.Info("Setup exchange")
@@ -43,14 +43,14 @@ func main() {
 	// setup repository
 	repo, err := repository.NewPostgreSQLPool(config.GetDatabaseURL(), logger)
 	if err != nil {
-		logger.Fatalf("Setup repository failed: %s", err)
+		logger.Panicf("Setup repository failed: %s", err)
 	}
 	logger.Info("Setup repository")
 
 	// setup telegram bot
 	telegram, err := tg.NewTelegramBot(config.GetTelegramBotToken(), logger)
 	if err != nil {
-		logger.Fatalf("Setup telegram failed: %s", err)
+		logger.Panicf("Setup telegram failed: %s", err)
 	}
 	logger.Info("Setup telegram bot")
 
@@ -93,7 +93,7 @@ func main() {
 		go func() {
 			<-forceShutdownCtx.Done()
 			if forceShutdownCtx.Err() == context.DeadlineExceeded {
-				logger.Fatal("graceful shutdown timed out, forcing exit")
+				logger.Panic("graceful shutdown timed out, forcing exit")
 			}
 			forceShutdown()
 		}()
@@ -101,20 +101,20 @@ func main() {
 		// Trigger graceful shutdown
 		err = srv.Shutdown(forceShutdownCtx)
 		if err != nil {
-			logger.Fatal(err)
+			logger.Panic(err)
 		}
 		logger.Info("Server done")
 
 		botShutdown()
 		err = kraken.CloseConnection()
 		if err != nil {
-			logger.Fatal(err)
+			logger.Panic(err)
 		}
 		logger.Info("WS exchange connection done")
 	}()
 
 	if err = srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatalf("ListenAndServe: %s", err)
+		logger.Panicf("ListenAndServe: %s", err)
 	}
 
 	shutdownWait.Wait()

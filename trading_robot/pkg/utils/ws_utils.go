@@ -12,11 +12,11 @@ var ErrBadHandshake = errors.New("can not handshake with host")
 
 // RetryableWSConn - should be one instance for each dial
 type RetryableWSConn struct {
-	Url        url.URL
-	MaxRetries int
+	URL           url.URL
+	MaxRetries    int
 	RequestHeader http.Header
 
-	conn       *websocket.Conn
+	conn *websocket.Conn
 }
 
 func (c *RetryableWSConn) RetryableDial() (*http.Response, error) {
@@ -27,7 +27,7 @@ func (c *RetryableWSConn) RetryableDial() (*http.Response, error) {
 	)
 	for {
 		var err error
-		conn, resp, err = websocket.DefaultDialer.Dial(c.Url.String(), c.RequestHeader)
+		conn, resp, err = websocket.DefaultDialer.Dial(c.URL.String(), c.RequestHeader)
 		if err == nil {
 			break
 		}

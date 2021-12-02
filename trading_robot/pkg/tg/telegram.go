@@ -29,8 +29,8 @@ func NewTelegramBot(token string, logger *log.Logger) (*TelegramBot, error) {
 	}
 
 	return &TelegramBot{
-		bot:   bot,
-		users: make(map[string]int64),
+		bot:    bot,
+		users:  make(map[string]int64),
 		logger: logger,
 	}, nil
 }
@@ -58,7 +58,6 @@ func (tg *TelegramBot) Serve(ctx context.Context) {
 			}
 		}
 	}
-
 }
 
 func (tg *TelegramBot) NotifyUsers(message string) {

@@ -50,4 +50,3 @@ func TestGenerateToken(t *testing.T) {
 		a.NoError(err)
 	}
 }
-

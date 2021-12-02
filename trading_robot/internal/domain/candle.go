@@ -16,15 +16,15 @@ type Candle struct {
 	TS     time.Time    // Время начала интервала
 }
 
-func NewCandle(price Price, period CandlePeriod, TS time.Time) Candle {
+func NewCandle(price Price, period CandlePeriod, ts time.Time) Candle {
 	return Candle{
 		Ticker: price.ProductID,
 		Period: period,
-		Open: price.Price,
-		High: price.Price,
-		Low: price.Price,
-		Close: price.Price,
-		TS:     TS,
+		Open:   price.Price,
+		High:   price.Price,
+		Low:    price.Price,
+		Close:  price.Price,
+		TS:     ts,
 	}
 }
 
@@ -104,4 +104,3 @@ func GenerateCandles(in <-chan Price, period CandlePeriod, wg *sync.WaitGroup) <
 
 	return out
 }
-

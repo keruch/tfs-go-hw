@@ -40,7 +40,7 @@ const (
 	LimitPrice    QueryParam = "limitPrice"
 	StopPrice     QueryParam = "stopPrice"
 	TriggerSignal QueryParam = "triggerSignal"
-	CliOrdId      QueryParam = "cliOrdId"
+	CliOrdID      QueryParam = "cliOrdId"
 	ReduceOnly    QueryParam = "reduceOnly"
 )
 

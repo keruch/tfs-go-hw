@@ -108,11 +108,6 @@ const (
     "version": 1
 }`
 
-	errorEvent = `{  
-    "event":"error",
-    "message":"Invalid product id"
-}`
-
 	subscriptionTickerData = `{
   "time": 1612270825253,
   "feed": "ticker",

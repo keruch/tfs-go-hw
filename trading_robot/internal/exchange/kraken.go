@@ -34,7 +34,7 @@ func NewKrakenExchange(logger *log.Logger) (*KrakenExchange, error) {
 	}
 
 	rwsconn := &utils.RetryableWSConn{
-		Url:           u,
+		URL:           u,
 		MaxRetries:    kraken.MaxRetries,
 		RequestHeader: nil,
 	}
@@ -220,7 +220,7 @@ func (k *KrakenExchange) sendRequest(event kraken.Event, feed kraken.Feed, ticke
 func (k *KrakenExchange) updateConnection() error {
 	pairs := make([]string, 0)
 	k.mu.RLock()
-	for pair, _ := range k.pairs {
+	for pair := range k.pairs {
 		pairs = append(pairs, pair)
 	}
 	k.mu.RUnlock()

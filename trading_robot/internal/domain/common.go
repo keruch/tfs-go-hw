@@ -57,7 +57,7 @@ type Order struct {
 	LimitPrice    float64 `json:"limitPrice,omitempty"`
 	StopPrice     float64 `json:"stopPrice,omitempty"`
 	TriggerSignal string  `json:"triggerSignal,omitempty"`
-	CliOrdId      string  `json:"cliOrdId,omitempty"`
+	CliOrdID      string  `json:"cliOrdId,omitempty"`
 	ReduceOnly    string  `json:"reduceOnly,omitempty"`
 }
 
