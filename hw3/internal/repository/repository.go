@@ -2,8 +2,9 @@ package repository
 
 import (
 	"context"
-	"tfs-go-hw/hw3/internal/domain"
-	"tfs-go-hw/hw3/internal/domain/generator"
+
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain"
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain/generator"
 )
 
 type PricesData interface {

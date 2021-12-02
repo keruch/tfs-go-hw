@@ -3,8 +3,9 @@ package generator
 import (
 	"context"
 	"math/rand"
-	"tfs-go-hw/hw3/internal/domain"
 	"time"
+
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain"
 )
 
 type Config struct {

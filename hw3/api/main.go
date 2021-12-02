@@ -4,12 +4,13 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"tfs-go-hw/hw3/internal/domain/generator"
-	"tfs-go-hw/hw3/internal/repository"
-	"tfs-go-hw/hw3/internal/services"
 	"time"
 
-	"tfs-go-hw/hw3/pkg/log"
+	"github.com/keruch/tfs-go-hw/hw3/internal/domain/generator"
+	"github.com/keruch/tfs-go-hw/hw3/internal/repository"
+	"github.com/keruch/tfs-go-hw/hw3/internal/services"
+
+	"github.com/keruch/tfs-go-hw/hw3/pkg/log"
 )
 
 var tickers = []string{"AAPL", "SBER", "NVDA", "TSLA"}
@@ -40,7 +41,7 @@ func main() {
 	cs := services.NewCandlesService(repo, logger)
 	err := cs.GenerateCandles(ctx)
 	if err != nil {
-		logger.Errorf("Error while generating candles: %v", err)
+		logger.Errorf("Error while generating candles_generator: %v", err)
 		return
 	}
 }
