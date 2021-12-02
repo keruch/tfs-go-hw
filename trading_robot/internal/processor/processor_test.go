@@ -21,13 +21,18 @@ func (r *RepoMock) StoreToDB(ctx context.Context, response domain.CreateOrderRes
 	return args.Error(0)
 }
 
-type OrdersSenderMock struct {
+type OrdersSenderPricesGetterMock struct {
 	mock.Mock
 }
 
-func (c *OrdersSenderMock) CreateOrder(order domain.Order) (response domain.CreateOrderResponse, err error) {
+func (c *OrdersSenderPricesGetterMock) CreateOrder(order domain.Order) (response domain.CreateOrderResponse, err error) {
 	args := c.Called(order)
 	return args.Get(0).(domain.CreateOrderResponse), args.Error(1)
+}
+
+func (c *OrdersSenderPricesGetterMock) GetPrices(ctx context.Context) <-chan domain.Price {
+	c.Called(ctx)
+	return nil
 }
 
 type StrategyMock struct {
@@ -59,13 +64,13 @@ func (n *NotifierMock) NotifyUsers(message string) {
 type Environment struct {
 	suite.Suite
 	repo       *RepoMock
-	controller *OrdersSenderMock
+	controller *OrdersSenderPricesGetterMock
 	strategy   *StrategyMock
 	notifier   *NotifierMock
 }
 
 func (e *Environment) SetupSuite() {
-	e.controller = new(OrdersSenderMock)
+	e.controller = new(OrdersSenderPricesGetterMock)
 	e.repo = new(RepoMock)
 	e.strategy = new(StrategyMock)
 	e.notifier = new(NotifierMock)
@@ -144,7 +149,7 @@ func (e *Environment) TestProcessor() {
 	}()
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go processor.ProcessCandles(out, &wg)
+	go processor.processCandles(out, &wg)
 	wg.Wait()
 }
 

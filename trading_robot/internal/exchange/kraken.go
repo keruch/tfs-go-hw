@@ -164,11 +164,12 @@ func (k *KrakenExchange) CloseConnection() error {
 
 func (k *KrakenExchange) SubscribePairs(pairs ...string) error {
 	k.mu.RLock()
-	if len(k.pairs) > 1 {
+	pairsCount := len(k.pairs)
+	k.mu.RUnlock()
+	if pairsCount >= 1 {
 		// TODO: delete hardcoded error
 		return errors.New("can't subscribe to more than one ticker feed")
 	}
-	k.mu.RUnlock()
 	k.mu.Lock()
 	for _, pair := range pairs {
 		k.pairs[pair] = true
@@ -223,6 +224,9 @@ func (k *KrakenExchange) updateConnection() error {
 		pairs = append(pairs, pair)
 	}
 	k.mu.RUnlock()
+	k.mu.Lock()
+	k.pairs = make(map[string]bool)
+	k.mu.Unlock()
 	return k.SubscribePairs(pairs...)
 }
 

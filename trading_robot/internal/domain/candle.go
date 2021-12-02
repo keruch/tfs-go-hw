@@ -73,7 +73,7 @@ func GenerateCandles(in <-chan Price, period CandlePeriod, wg *sync.WaitGroup) <
 		defer close(out)
 
 		var (
-			startPeriod = false
+			startPeriod = true
 			currentTS   time.Time
 			candle      Candle
 		)
@@ -99,6 +99,7 @@ func GenerateCandles(in <-chan Price, period CandlePeriod, wg *sync.WaitGroup) <
 
 			candle = Update(candle, price)
 		}
+		out <- candle
 	}()
 
 	return out

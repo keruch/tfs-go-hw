@@ -1,7 +1,6 @@
 package kraken
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/keruch/tfs-go-hw/trading_robot/internal/domain"
@@ -47,9 +46,8 @@ func TestGenerateToken(t *testing.T) {
 		privateKey := "D3xf8GQWr/HylLexjL2055e5Pn5z+vIyu0zsSRfbFA+W07Q4jbpb6qa0H5xzbywHWPG7quEA6V2imZ3iqNEe5Bj/"
 		endpoint := "/api/v3/sendorder"
 		postData := "chart=&limitPrice=4571.1&orderType=ioc&side=sell&size=100&stopPrice=0.0&symbol=PI_ETHUSD&triggerSignal="
-		token, err := GenerateToken(privateKey, endpoint, postData)
+		_, err := GenerateToken(privateKey, endpoint, postData)
 		a.NoError(err)
-		fmt.Println(token)
 	}
 }
 

@@ -53,8 +53,6 @@ func TestGenerateCandles(t *testing.T) {
 	wg.Add(1)
 	out := GenerateCandles(in, CandlePeriod1m, &wg)
 
-	_ = <-out // the first value is always invalid
-
 	testID := 0
 	t.Logf("\tTest %d:\tOne full candle", testID)
 	{

@@ -1,7 +1,6 @@
 package indicator
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,7 +64,6 @@ func TestEMAEvaluator(t *testing.T) {
 		values := []float64{2, 12, 2, 12, 2, 12}
 		for _, val := range values {
 			e.UpdateEMA(val)
-			fmt.Println(e.GetEMA())
 		}
 		a.Equalf(7.958400000000001, e.GetEMA(), "Should be equal")
 	}
