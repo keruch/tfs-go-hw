@@ -1,0 +1,1 @@
+[Link](https://github.com/tfs-go/lections21/blob/main/lection02/homework/README.MD) to the assigment
