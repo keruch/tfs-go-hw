@@ -3,14 +3,14 @@
 This project contains the implementation of a cryptocurrency trading bot on [Kraken](https://futures.kraken.com/) exchange, written in Golang.
 
 
-##Setup config
+## Setup config
 Before running, you must fill the `config.toml` due to example `config/config.example.toml`. This file should be placed in `config` directory.
 You can create private and public keys in your Kraken Futures account.
 Read how to do it [here](https://support.kraken.com/hc/en-us/articles/360022839451-Generate-API-keys).
 You can read how to get Telegram token [here](https://core.telegram.org/bots). 
 
 
-##Working with bot
+## Working with bot
 To launch the bot, run
 ```
 go run ./cmd/traging_robot
@@ -48,7 +48,7 @@ price = price * (1 - multiplier),    sell case
 
 Bot can be gracefully terminated with the SIGHUP, SIGINT, SIGTERM, and SIGQUIT signals.
 
-##Endpoints list:
+## Endpoints list:
 ```
 POST /subscribe/<ticker>
 POST /unsubscribe/<ticker>
